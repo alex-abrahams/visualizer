@@ -40,9 +40,17 @@ _VARS['window'] = sg.Window('Mic to waveform plot + Max Level',
                             layout, finalize=True,
                             background_color='#809AB6',
                             transparent_color='#809AB6',
-                            keep_on_top=True)
+                            keep_on_top=True,
+                            no_titlebar=True )
 _VARS['window'].Maximize()
 graph = _VARS['window']['graph']
+
+_VARS['window'].bind("<Escape>", "Exit")
+_VARS['window'].bind("<c>", "Circle")
+_VARS['window'].bind("<l>", "Line")
+_VARS['window'].bind("<t>", "Trail")
+_VARS['window'].bind("<Spacebar>", "Listen")
+
 
 # INIT vars:
 CHUNK = 1024  # Samples: 1024,  512, 256, 128
@@ -102,7 +110,7 @@ def rgb_to_hex(r, g, b):
 
 drawAxis()
 
-
+listen()
 # MAIN LOOP
 while True:
     HUE = (HUE+5)%360

@@ -5,6 +5,7 @@ import numpy as np
 import math
 from screeninfo import get_monitors
 import colorsys
+from PIL import ImageGrab, Image
 
 """ RealTime Audio Waveform plot """
 
@@ -24,18 +25,20 @@ print(WIDTH,HEIGHT)
 AppFont = 'Any 16'
 sg.theme('DarkBlue3')
 layout = [[sg.Graph(canvas_size=(WIDTH, HEIGHT-200),
-                    graph_bottom_left=(-2, -2),
-                    graph_top_right=(102, 102),
+                    graph_bottom_left=(0, 0),
+                    graph_top_right=(100, 100),
                     background_color='#809AB6',
                     key='graph')],
           [sg.ProgressBar(4000, orientation='h',
-                          size=(20, 20), key='-PROG-')],
+                          size=(20, 20), key='-PROG-'), 
+           sg.Text('0', key='-VOL-')],
           [sg.Button('Listen', font=AppFont),
            sg.Button('Stop', font=AppFont, disabled=True),
            sg.Button('Exit', font=AppFont),
            sg.Button('Circle', font=AppFont),
            sg.Button('Line', font=AppFont),
-           sg.Button('Trail', font=AppFont)]]
+           sg.Button('Trail', font=AppFont),
+           sg.Button('Pixel', font=AppFont)]]
 _VARS['window'] = sg.Window('Mic to waveform plot + Max Level',
                             layout, finalize=True,
                             background_color='#809AB6',
@@ -49,6 +52,7 @@ _VARS['window'].bind("<Escape>", "Exit")
 _VARS['window'].bind("<c>", "Circle")
 _VARS['window'].bind("<l>", "Line")
 _VARS['window'].bind("<t>", "Trail")
+_VARS['window'].bind("<p>", "Pixel")
 _VARS['window'].bind("<Spacebar>", "Listen")
 
 
@@ -62,6 +66,9 @@ CIRCLE = False
 LINE = False
 TRAIL = False
 HUE = 0
+PIXEL = False
+maxVol = 0
+vol = 0
 
 
 # FUNCTIONS:
@@ -83,6 +90,7 @@ def stop():
         _VARS['stream'].stop_stream()
         _VARS['stream'].close()
         _VARS['window']['-PROG-'].update(0)
+        _VARS['window']['-VOL-'].update('1')
         _VARS['window'].FindElement('Stop').Update(disabled=True)
         _VARS['window'].FindElement('Listen').Update(disabled=False)
 
@@ -111,6 +119,11 @@ def rgb_to_hex(r, g, b):
 drawAxis()
 
 listen()
+
+im = Image.open('image.jpg', 'r')
+imWidth, imHeight = im.size
+pixel_values = list(im.getdata())
+pixel_values = np.array(pixel_values).reshape((imWidth, imHeight, 3))
 # MAIN LOOP
 while True:
     HUE = (HUE+5)%360
@@ -141,6 +154,11 @@ while True:
             TRAIL = True
         else:
             TRAIL = False
+    if event == 'Pixel':
+        if PIXEL is False:
+            PIXEL = True
+        else:
+            PIXEL = False
 
     # Along with the global audioData variable, this\
     # bit updates the waveform plot, left it here for
@@ -148,11 +166,29 @@ while True:
 
     elif _VARS['audioData'].size != 0:
         # Uodate volumne meter
-        _VARS['window']['-PROG-'].update(np.amax(_VARS['audioData']))
+        vol = np.amax(_VARS['audioData'])
+        _VARS['window']['-PROG-'].update(vol)
+        if (vol > maxVol):
+            maxVol = vol
+            _VARS['window']['-VOL-'].update(str(maxVol))
         # Redraw plot
         if (HUE%50 == 0 or TRAIL is False):
             graph.erase()
-        drawAxis()
+        #drawAxis()
+        
+        # do pixilation stuff
+        if PIXEL:
+            #px = ImageGrab.grab().load()
+            step = vol/(20000/50)
+            if (step < 2):
+                step = 2
+            for x in range(0, imWidth, int(step)):
+                for y in range(0, imHeight, int(step)):
+                    pixColour = rgb_to_hex(pixel_values[imHeight-1-y][x][0], pixel_values[imHeight-1-y][x][1], pixel_values[imHeight-1-y][x][2])
+                    point1 = (x,y)
+                    point2 = ((x+step),(y+step))
+                    #print("color "+str(pixColour)+" at "+str(point1)+" to "+str(point2))
+                    graph.DrawRectangle(point1, point2, fill_color=pixColour, line_color=None)
 
         # Here we go through the points in the audioData object and draw them
         # Note that we are rescaling ( dividing by 100 ) and centering (+50 )
@@ -163,10 +199,11 @@ while True:
             i = 0
             for x in range(CHUNK):
                 currentPoint = (x, (_VARS['audioData'][x]/100)+50)
+                #print("circle at "+str(currentPoint))
                 graph.DrawCircle(currentPoint, 0.4,
                                 line_color=colour, fill_color=colour)
                 if (i > 0 and LINE):
-                    graph.DrawLine(oldPoint, currentPoint)                
+                    graph.DrawLine(oldPoint, currentPoint, color=colour)                
                 oldPoint = currentPoint
                 i += 1
         else:
@@ -179,7 +216,7 @@ while True:
                 graph.DrawCircle(currentPoint, 0.4,
                                 line_color=colour, fill_color=colour)
                 if (i > 0 and LINE):
-                    graph.DrawLine(oldPoint, currentPoint)
+                    graph.DrawLine(oldPoint, currentPoint, color=colour)
                 oldPoint = currentPoint
                 
                 i += 1
